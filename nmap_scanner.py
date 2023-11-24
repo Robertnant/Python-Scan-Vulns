@@ -68,10 +68,12 @@ for ip_address in nm.all_hosts():
 json_all_exposed_devices = [exposed_device.to_dict() for exposed_device in all_exposed_devices]
 print(json_all_exposed_devices)
 
-json_formatted_all_exposed_devices = json.dumps(json_all_exposed_devices, indent=2)
+json_data = {
+    "all_exposed_devices": json_all_exposed_devices
+}
 
 with open('all_exposed_devices.json', 'w') as json_file:
-    json.dump(json_formatted_all_exposed_devices, json_file)
+    json.dump(json_data, json_file, indent=2)
 
 """
 EXAMPLE OF OBJECTS
