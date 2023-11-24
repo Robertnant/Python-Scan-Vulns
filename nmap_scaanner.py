@@ -9,12 +9,21 @@ s.close()
 
 # Get the subnet
 subnet = ip_address.rsplit('.', 1)[0] + '.0/24'
+print(subnet)
 
+
+
+print("ici")
 # Create a PortScanner object
 nm = nmap.PortScanner()
+print("lq")
+
 
 # Scan the subnet
-nm.scan(hosts=subnet, arguments='-p 1-1024')
+nm.scan(hosts=subnet, arguments=')-sV -p 8080 -T5')
+print("encore")
+
+
 
 print(nm.all_hosts())
 # Iterate over the scan results
@@ -28,3 +37,6 @@ for host in nm.all_hosts():
         lport = nm[host][proto].keys()
         for port in lport:
             print ('port : %s\tstate : %s' % (port, nm[host][proto][port]['state']))
+            service = nm[host][proto][port]['name']
+            version = nm[host][proto][port]['version']
+            #print(service, version)
