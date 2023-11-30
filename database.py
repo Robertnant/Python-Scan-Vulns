@@ -1,13 +1,26 @@
 import json
+import sqlite3
 
-# TODO: Add sqlite
-
-# Load NVD JSON data from the specific file
 with open('nvdcve-1.1-2023.json') as file:
     nvd_data = json.load(file)
 
-# Extract relevant information
-vulnerabilities = []
+# Initialize SQLite database
+conn = sqlite3.connect('vulnerabilities.db')
+cursor = conn.cursor()
+
+# Create a table to store vulnerability data
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS vulnerabilities (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cve_id TEXT,
+        description TEXT,
+        severity REAL,
+        affected_software TEXT,
+        references_data TEXT
+    )
+''')
+
+# Extract and store relevant information in the database
 for cve_item in nvd_data['CVE_Items']:
     cve_id = cve_item['cve']['CVE_data_meta']['ID']
     description = cve_item['cve']['description']['description_data'][0]['value']
@@ -15,50 +28,49 @@ for cve_item in nvd_data['CVE_Items']:
     if impact:
         severity = impact['baseMetricV3']['cvssV3']['baseScore']
 
-    # Extract affected software versions
-    affected_software = []
-    configurations = cve_item.get('configurations', {}).get('nodes', [])
-    for node in configurations:
-        if 'cpe_match' in node:
-            for cpe_match in node['cpe_match']:
-                affected_software_data = {
-                    'vendor': cpe_match.get('cpe23Uri', '').split(':')[3],
-                    'product': cpe_match.get('cpe23Uri', '').split(':')[4],
-                    'version': cpe_match.get('cpe23Uri', '').split(':')[5],
-                }
-                if len(affected_software_data):
-                    affected_software.append(affected_software_data)
-    
-    # Extract references
-    references = []
-    for reference_data in cve_item.get('cve', {}).get('references', {}).get('reference_data', []):
-        reference = {
+    affected_software = json.dumps([
+        {
+            'vendor': cpe_match.get('cpe23Uri', '').split(':')[3],
+            'product': cpe_match.get('cpe23Uri', '').split(':')[4],
+            'version': cpe_match.get('cpe23Uri', '').split(':')[5],
+        }
+        for node in cve_item.get('configurations', {}).get('nodes', [])
+        if 'cpe_match' in node
+        for cpe_match in node['cpe_match']
+    ])
+
+    references_data = json.dumps([
+        {
             'url': reference_data.get('url', ''),
             'name': reference_data.get('name', ''),
             'source': reference_data.get('refsource', ''),
-            # Add more reference-related fields as needed
         }
-        references.append(reference)
+        for reference_data in cve_item.get('cve', {}).get('references_data', {}).get('reference_data', [])
+    ])
 
-    # Create a simplified vulnerability entry
-    vulnerability = {
-        'cve_id': cve_id,
-        'description': description,
-        'severity': severity,
-        'affected_software': affected_software,
-        'references': references,
-        # Add more fields as needed
-    }
+    # Insert data into the vulnerabilities table
+    cursor.execute('''
+        INSERT INTO vulnerabilities (cve_id, description, severity, affected_software, references_data)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (cve_id, description, severity, affected_software, references_data))
 
-    vulnerabilities.append(vulnerability)
-    print('\nVulnerabilities: ')
-    for vulnerability in vulnerabilities:
-        print(vulnerability['affected_software'])
+conn.commit()
+conn.close()
 
-# Display the extracted information for the first vulnerability as an example
-print("Example of Extracted Information:")
-print("CVE ID:", vulnerabilities[0]['cve_id'])
-print("Description:", vulnerabilities[0]['description'])
-print("Severity:", vulnerabilities[0]['severity'])
-print("Affected Software:", vulnerabilities[0]['affected_software'])
-print("References:", vulnerabilities[0]['references'])
+conn = sqlite3.connect('vulnerabilities.db')
+cursor = conn.cursor()
+
+# Fetch the first 5 vulnerabilities from the database (example)
+cursor.execute('SELECT * FROM vulnerabilities LIMIT 5')
+results = cursor.fetchall()
+
+for result in results:
+    print("\nExample of Extracted Information:")
+    print("CVE ID:", result[1])
+    print("Description:", result[2])
+    print("Severity:", result[3])
+    print("Affected Software:", json.loads(result[4]))
+    print("References:", json.loads(result[5]))
+
+# Close the connection
+conn.close()
