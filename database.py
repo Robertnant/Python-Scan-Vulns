@@ -250,4 +250,4 @@ def should_download_files(download_folder, start_year, end_year):
 #     print("Affected Software:", vulnerability['affected_software'])
 #     print("References:", vulnerability['references_data'])
 
-check_vulnerabilities()
+# check_vulnerabilities()
