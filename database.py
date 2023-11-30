@@ -131,19 +131,18 @@ def download_cve():
 
 def fetch_vulnerabilities(cursor, service_name, version):
     cursor.execute('''
-        SELECT cve_id, description, severity
+        SELECT cve_id, description, severity, references_data
         FROM vulnerabilities
         WHERE JSON_ARRAY_LENGTH(affected_software) > 0 AND (
             EXISTS (
                 SELECT 1
                 FROM json_each(affected_software)
                 WHERE 
-                    json_extract(value, '$.vendor') = ? AND
                     json_extract(value, '$.product') = ? AND
                     json_extract(value, '$.version') = ?
             )
         )
-    ''', (service_name, 'junos', version))  # Example with 'junos' as the fixed product, modify as needed
+    ''', (service_name, version))
     return cursor.fetchall()
 
 
@@ -175,13 +174,19 @@ def check_vulnerabilities():
             vulnerabilities = fetch_vulnerabilities(cursor, service_name, service_version)
 
             # Append vulnerabilities information to the list
-            for cve_id, description, severity in vulnerabilities:
+            for cve_id, description, severity, references_data in vulnerabilities:
+                references = json.loads(references_data)
+
+                # Extract recommendations from references
+                recommendations = [
+                    ref.get('url', '') for ref in references
+                ]
                 vulnerabilities_info.append({
                     'ip_address': ip_address,
                     'cve_id': cve_id,
                     'description': description,
                     'severity': severity,
-                    'recommendations': 'Add your recommendation here if needed.',
+                    'recommendations': recommendations,
                 })
 
     # Close the connection to the database
@@ -234,7 +239,6 @@ def should_download_files(download_folder, start_year, end_year):
 
 
 # Example usage:
-# download_cve()
 # retrieved_data = retrieve_vulnerabilities(VULNERABILITIES_DATABASE_PATH, limit=5)
 
 # # Print retrieved vulnerabilities
