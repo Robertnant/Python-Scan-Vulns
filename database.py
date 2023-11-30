@@ -9,6 +9,64 @@ from datetime import datetime, timedelta
 OUTDATED_CVE_TIMEDELTA = 7
 VULNERABILITIES_DATABASE_PATH = 'vulnerabilities_all_years.db'
 
+
+def fetch_vulnerabilities(cursor, service_name, version):
+    cursor.execute('''
+        SELECT cve_id, description, severity
+        FROM vulnerabilities
+        WHERE JSON_ARRAY_LENGTH(affected_software) > 0 AND (
+            EXISTS (
+                SELECT 1
+                FROM json_each(affected_software)
+                WHERE 
+                    json_extract(value, '$.vendor') = ? AND
+                    json_extract(value, '$.product') = ? AND
+                    json_extract(value, '$.version') = ?
+            )
+        )
+    ''', (service_name, 'junos', version))  # Example with 'junos' as the fixed product, modify as needed
+    return cursor.fetchall()
+
+def check_vulnerabilities():
+    # Read the file containing exposed devices' information
+    with open('all_exposed_devices.json') as file:
+        exposed_devices_data = json.load(file)
+
+    # Connect to the SQLite database
+    conn = sqlite3.connect(VULNERABILITIES_DATABASE_PATH)
+    cursor = conn.cursor()
+
+    # List to store vulnerabilities information
+    vulnerabilities_info = []
+
+    # Iterate through each exposed device
+    for exposed_device in exposed_devices_data.get('all_exposed_devices', []):
+        ip_address = exposed_device.get('ip_address', '')
+        
+        # Iterate through services of each exposed device
+        for service in exposed_device.get('services', []):
+            service_name = service.get('name', '')
+            service_version = service.get('version', '')
+
+            # Fetch vulnerabilities for the service name and version
+            vulnerabilities = fetch_vulnerabilities(cursor, service_name, service_version)
+
+            # Append vulnerabilities information to the list
+            for cve_id, description, severity in vulnerabilities:
+                vulnerabilities_info.append({
+                    'ip_address': ip_address,
+                    'cve_id': cve_id,
+                    'description': description,
+                    'severity': severity,
+                    'recommendations': 'Add your recommendation here if needed.',
+                })
+
+    # Close the connection to the database
+    conn.close()
+
+    print(vulnerabilities_info)
+    return vulnerabilities_info
+
 def retrieve_vulnerabilities(database_path, limit=10):
     # Connect to the SQLite database
     conn = sqlite3.connect(database_path)
@@ -173,7 +231,7 @@ def download_cve():
 
 # Example usage:
 # download_cve()
-# retrieved_data = retrieve_vulnerabilities(VULNERABILITIES_DATABASE_PATH, limit=5)
+retrieved_data = retrieve_vulnerabilities(VULNERABILITIES_DATABASE_PATH, limit=5)
 
 # # Print retrieved vulnerabilities
 # for index, vulnerability in enumerate(retrieved_data, start=1):
@@ -183,3 +241,5 @@ def download_cve():
 #     print("Severity:", vulnerability['severity'])
 #     print("Affected Software:", vulnerability['affected_software'])
 #     print("References:", vulnerability['references_data'])
+
+check_vulnerabilities()
