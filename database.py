@@ -1,3 +1,4 @@
+import logging
 import os
 import requests
 import json
@@ -6,8 +7,12 @@ import sqlite3
 from urllib.parse import urljoin
 from datetime import datetime, timedelta
 
-OUTDATED_CVE_TIMEDELTA = 7
+OUTDATED_CVE_TIMEDELTA = 0
 VULNERABILITIES_DATABASE_PATH = 'vulnerabilities_all_years.db'
+
+# Logging module configuration.
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def download_cve():
     # Create a folder to store the ZIP files
@@ -23,7 +28,7 @@ def download_cve():
 
     # Download and extract NVD CVE ZIP files for each year
     if not should_download_files(download_folder, start_year, end_year):
-        print('Database already exists and is up to date. The existing database will be used.')
+        logger.info('Database already exists and is up to date. The existing database will be used.')
         return
     for year in range(start_year, end_year + 1):
         zip_file_name = f'nvdcve-1.1-{year}.json.zip'
@@ -34,12 +39,12 @@ def download_cve():
         with open(zip_file_path, 'wb') as zip_file:
             zip_file.write(response.content)
 
-        print(f'Downloaded: {zip_file_name}')
+        logger.info(f'Downloaded: {zip_file_name}')
 
         with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
             zip_ref.extractall(download_folder)
 
-        print(f'Extracted: {zip_file_name}')
+        logger.info(f'Extracted: {zip_file_name}')
 
     # Initialize SQLite database
     conn = sqlite3.connect(VULNERABILITIES_DATABASE_PATH)
@@ -66,7 +71,7 @@ def download_cve():
         with open(json_file_path) as file:
             nvd_data = json.load(file)
 
-        print(f'Processing: {json_file_name}')
+        logger.info(f'Processing: {json_file_name}')
 
         for cve_item in nvd_data['CVE_Items']:
             cve_id = cve_item['cve']['CVE_data_meta']['ID']
@@ -115,7 +120,7 @@ def download_cve():
                 VALUES (?, ?, ?, ?, ?)
             ''', (cve_id, description, severity, affected_software, references_data))
 
-        print(f'Stored in database: {json_file_name}')
+        logger.info(f'Stored in database: {json_file_name}')
 
     conn.commit()
     conn.close()
@@ -126,7 +131,7 @@ def download_cve():
         zip_file_path = os.path.join(download_folder, zip_file_name)
         os.remove(zip_file_path)
 
-    print('Data from all years has been stored in the SQLite database.')
+    logger.info('Data from all years has been stored in the SQLite database.')
 
 
 def fetch_vulnerabilities(cursor, service_name, version):
@@ -250,4 +255,4 @@ def should_download_files(download_folder, start_year, end_year):
 #     print("Affected Software:", vulnerability['affected_software'])
 #     print("References:", vulnerability['references_data'])
 
-# check_vulnerabilities()
+check_vulnerabilities()
